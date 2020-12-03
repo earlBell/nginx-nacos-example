@@ -9,29 +9,53 @@ import (
 	"github.com/nacos-group/nacos-sdk-go/common/constant"
 	"github.com/nacos-group/nacos-sdk-go/model"
 	"github.com/nacos-group/nacos-sdk-go/vo"
+	"io/ioutil"
 	"log"
 )
 
+type NacosConf struct {
+	//nacos注册中心地址
+	IpAddr string
+	//端口
+	Port uint64
+	//地址前缀
+	ContextPath string
+	//namespace
+	NamespaceId string
+	//监听的服务名称
+	ListenerService string
+	Group           string
+}
+
+//nginx刷新配置
+type NginxRefreshConf struct {
+	NacosConf NacosConf
+	//nginx 安装根目录
+	NginxPath string
+}
+
 //nacos客户端配置
-func NacosConfig() naming_client.INamingClient {
+func InitNacosConfig(nacosCof *NacosConf) naming_client.INamingClient {
+	logPath, _ := ioutil.TempDir("", "nacos-log")
+	cachePath, _ := ioutil.TempDir("", "nacos-cache")
 	//client客户端请求配置
 	clientConfig := constant.ClientConfig{
 		TimeoutMs:           5000,
 		NotLoadCacheAtStart: true,
-		LogDir:              "D:\\tmp\\log",
-		CacheDir:            "D:\\tmp\\cache",
+		LogDir:              logPath,
+		CacheDir:            cachePath,
 		RotateTime:          "1h",
 		MaxAge:              3,
 		LogLevel:            "debug",
-		NamespaceId:         "3146d3eb-2422-4439-a063-a9a0df197c5e",
+		NamespaceId:         nacosCof.NamespaceId,
 	}
 
 	// nacos注册中心服务地址配置（可多个）
 	serverConfigs := []constant.ServerConfig{
 		{
-			IpAddr:      "localhost",
-			ContextPath: "/nacos",
-			Port:        8848,
+			IpAddr:      nacosCof.IpAddr,
+			ContextPath: nacosCof.ContextPath,
+			Port:        nacosCof.Port,
 			Scheme:      "http",
 		},
 	}
@@ -50,13 +74,13 @@ func NacosConfig() naming_client.INamingClient {
 /**
  * 监听nacos的服务并把最新的服务ip配置到nginx
  * @params namingClient nacos客户端
- * @params nginxPath nginx目录（根目录）
+ * @params NginxRefreshConf
  */
-func RefershNginxListener(namingClient naming_client.INamingClient, nginxPath string) {
+func RefershNginxListener(namingClient naming_client.INamingClient, conf *NginxRefreshConf) {
 	//监听参数配置
 	var subParam = vo.SubscribeParam{
-		ServiceName: "demo",
-		GroupName:   "GZ", // 默认值DEFAULT_GROUP
+		ServiceName: conf.NacosConf.ListenerService,
+		GroupName:   conf.NacosConf.Group, // 默认值DEFAULT_GROUP
 		SubscribeCallback: func(services []model.SubscribeService, err error) {
 			ips := hashset.New()
 			for _, service := range services {
@@ -69,7 +93,7 @@ func RefershNginxListener(namingClient naming_client.INamingClient, nginxPath st
 				ips.Add(ip)
 			}
 			//刷新nginx配置
-			NginxRefresh(ips, nginxPath)
+			NginxRefresh(ips, conf.NginxPath)
 		},
 	}
 

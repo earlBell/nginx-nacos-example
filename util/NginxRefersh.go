@@ -129,5 +129,14 @@ func nginxReload(nginxPath string) {
 		}
 		fmt.Println(string(result))
 		log.Println("win 刷新完成！")
+	} else if runtime.GOOS == "linux" {
+		reload := exec.Command("/bin/bash", "-c", "./sbin/nginx -s reload")
+		reload.Dir = filepath.FromSlash(nginxPath)
+		result, err := reload.Output()
+		if err != nil {
+			panic(err)
+		}
+		fmt.Println(string(result))
+		log.Println("linux 刷新完成！")
 	}
 }
